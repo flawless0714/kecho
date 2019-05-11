@@ -49,7 +49,7 @@ static int send_request(struct socket *sock, unsigned char *buf, size_t size)
 
     printk(MODULE_NAME ": start send request.\n");
 
-    length = kernel_sendmsg(sock, &msg, &vec, 1, strlen(buf) - 1);
+    length = kernel_sendmsg(sock, &msg, &vec, 1, (size < BUF_SIZE) ? size : 0);
 
     printk(MODULE_NAME ": send request = %s\n", buf);
 
