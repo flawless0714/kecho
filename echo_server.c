@@ -86,6 +86,8 @@ static int echo_server_worker(void *arg)
             printk(KERN_ERR MODULE_NAME ": send request error = %d\n", res);
             break;
         }
+
+        memset(buf, 0, BUF_SIZE);
     }
 
     res = get_request(sock, buf, BUF_SIZE - 1);
