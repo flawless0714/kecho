@@ -72,6 +72,8 @@ static int echo_server_worker(void *arg)
         return -1;
     }
 
+    memset(buf, 0, BUF_SIZE);
+
     while (!kthread_should_stop()) {
         res = get_request(sock, buf, BUF_SIZE - 1);
         if (res <= 0) {
