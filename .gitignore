@@ -54,4 +54,6 @@ dkms.conf
 
 # Misc
 .vscode
+*.txt
+*.png
 
