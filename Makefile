@@ -15,6 +15,13 @@ $(GIT_HOOKS):
 	@scripts/install-git-hooks
 	@echo
 
+client:
+	$(CC) -o perf perf_measure.c -Wall -pthread
+
+plot:
+	gnuplot scripts/perf.gp
+	gpicview perf_measure.png
+
 clean:
 	rm -f *.o *.ko *.mod.c *.symvers *.order .fastecho*
 	rm -fr .tmp_versions
