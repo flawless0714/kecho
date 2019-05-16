@@ -1,3 +1,18 @@
+// known issue(fix in next commit):
+// -1. During each TEST_COUNT, we should add a `usleep`(25000us test lowest
+// currently), or `mutex_idx` won't work,
+//     which futher cause seg fault (OOB access of `time_res`) (haven't figured
+//     why), this issue got connection with issue 4.
+// 1. cur_thread_cnt should start from 1, or it cause the failure of first reset
+// of time_res
+// 2. Typo "avg result for each thread" should be "avg result of each thread"
+// 3. Change measurement time scale from ns to us or ms, which means impl of
+// `time_diff_ns` should be updated
+//    too. (I think gettimeofday is proper one)
+// 4. We should wait for a while after each thread set test case, since the
+// state of TCP stack, TIME_WAIT,
+//    too many of this (resources to be released) will cause resource shortage
+//    of TCP stack, which further causing the failure of `connect`
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <netinet/in.h>
@@ -7,29 +22,36 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
 
-#define MAX_THREAD 1000
+#define COND_RD_WAIT_IN_SEC 1
+#define MAX_THREAD 20
 #define MAX_POSSIBLE_LENGTH \
     32  // this correspond to random-length dummy string, `msg_dum`
 #define TARGET_PORT 12345
 #define TEST_COUNT \
-    1  // we should change the measurement scale since ns is too small, which
-       // cause result overflow, then we can increase this
+    100  // we should change the measurement scale since ns is too small, which
+         // cause result overflow, then we can increase this
 #define RESULT_FILE_NAME "kecho_perf.txt"
-#define SLEEP_TIME 50000  // in us. TODO: sleep time may be shorter
 #define unlikely(x) __builtin_expect(!!(x), 0)
 
 // TODO: dummy msg shouldn't be a fixed-length string, its length should be
 // random to get more accurate measurement result
 const char *msg_dum = "dummy";
-pthread_t
-    pt[MAX_THREAD];  // create once, fit all test case, then we dont need malloc
-int rd_to_go =
-    0;  // blocks all threads before they are all ready to send message
-pthread_mutex_t my_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+// create once, fit all test case, then we dont need malloc
+pthread_t pt[MAX_THREAD];
+
+// blocks all threads before they are all ready to send message
+int rd_to_go = 0;
+
+pthread_mutex_t mutex_idx = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mutex_wa_cond = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t cond_wait_all = PTHREAD_COND_INITIALIZER;
+
 long time_res[MAX_THREAD] = {
     0};       // create once, fit all test case, then we dont need malloc
 int idx = 0;  // for indexing `time_res`
@@ -47,11 +69,29 @@ static inline long time_diff_ns(struct timespec *start, struct timespec *end)
 
 void *worker(void *arg)
 {
-    int sock_fd;
+    int sock_fd, rt;
     char dummy[MAX_POSSIBLE_LENGTH];
     long time_diff;
-
     struct timespec start, end;
+
+    struct timeval now;
+    struct timespec timeout;
+
+    gettimeofday(&now, NULL);
+    timeout.tv_sec = now.tv_sec + COND_RD_WAIT_IN_SEC;
+    timeout.tv_nsec = now.tv_usec * 1000;
+
+    pthread_mutex_lock(&mutex_wa_cond);
+    while (!rd_to_go) {
+        // wait till all threads created
+        rt = pthread_cond_timedwait(&cond_wait_all, &mutex_wa_cond, &timeout);
+    }
+    pthread_mutex_unlock(&mutex_wa_cond);
+    if (rt != 0) {
+        printf("cond_wait failed with error code: %d\n", rt);
+        exit(-1);
+    }
+
     sock_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (sock_fd == -1) {
         goto sock_init_fail;
@@ -68,9 +108,6 @@ void *worker(void *arg)
         goto connect_fail;
     }
 
-    while (!rd_to_go)
-        ;
-
     clock_gettime(CLOCK_REALTIME, &start);
     send(sock_fd, msg_dum, strlen(msg_dum), 0);
     recv(sock_fd, &dummy, MAX_POSSIBLE_LENGTH, 0);
@@ -78,17 +115,18 @@ void *worker(void *arg)
 
     close(sock_fd);
 
-    pthread_mutex_lock(&my_mutex);  // prevent failure of `idx`
 
     time_diff = time_diff_ns(&start, &end);
     if (unlikely(time_diff == -1)) {
         goto timeout;
     }
 
+    rt = pthread_mutex_lock(&mutex_idx);
+    // printf("\nmy idx is %d\n", idx);
     time_res[idx] += time_diff;
     idx++;
 
-    pthread_mutex_unlock(&my_mutex);
+    pthread_mutex_unlock(&mutex_idx);
 
     pthread_exit(NULL);
 
@@ -116,9 +154,6 @@ void create_threads(int thread_cnt)
             exit(-1);
         }
     }
-
-    usleep(SLEEP_TIME);  // after sleep, all threads should be standby.
-    rd_to_go = 1;
 }
 
 int main(void)
@@ -138,6 +173,15 @@ int main(void)
          cur_thread_cnt++) {
         for (int i = 0; i < TEST_COUNT; i++) {
             create_threads(cur_thread_cnt + 1);
+
+            pthread_mutex_lock(&mutex_wa_cond);
+
+            rd_to_go = 1;
+
+            // all threads are ready, let's start bombing kecho
+            pthread_cond_broadcast(&cond_wait_all);
+
+            pthread_mutex_unlock(&mutex_wa_cond);
 
             for (int x = 0; x < cur_thread_cnt;
                  x++) {  // waiting for all threads to finish the measurement
@@ -170,7 +214,6 @@ int main(void)
             time_res[i] = 0;
         }
         test_res_avg = 0;
-        // puts("\n\n\n");
     }
 
     goto success;
