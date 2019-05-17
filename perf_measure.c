@@ -1,19 +1,12 @@
 // known issue(fix in next commit):
-// -1. During each TEST_COUNT, we should add a `usleep`(25000us test lowest
-// currently), or `mutex_idx` won't work,
-//     which futher cause seg fault (OOB access of `time_res`) (haven't figured
-//     why), this issue got connection with issue 4.
 // 1. cur_thread_cnt should start from 1, or it cause the failure of first reset
 // of time_res
-// 2. Typo "avg result for each thread" should be "avg result of each thread"
-// 3. (data type of `test_res_avg` should change to ull)Change measurement time
+// 2. (data type of `test_res_avg` should change to ull)Change measurement time
 //    scale from ns to us or ms, which means impl of `time_diff_ns` should be
 //    updated too. (I think gettimeofday is proper one)
-// 4. We should wait for a while after each thread set test case, since the
-// state of TCP stack, TIME_WAIT,
 //    too many of this (resources to be released) will cause resource shortage
 //    of TCP stack, which further causing the failure of `connect`
-// 5. Remove inclusion of semaphore since we may no longer use it
+// 3. Remove inclusion of semaphore since we may no longer use it
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <netinet/in.h>
@@ -203,7 +196,7 @@ int main(void)
         // result calculation
         for (int i = 0; i < cur_thread_cnt; i++) {
             time_res[i] =
-                time_res[i] / TEST_COUNT;  // avg result for each thread
+                time_res[i] / TEST_COUNT;  // avg result of each thread
             test_res_avg +=
                 time_res[i];  // summation of avg result of all threads
             // printf("%ld\n", test_res_avg);
