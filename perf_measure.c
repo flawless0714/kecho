@@ -1,4 +1,4 @@
-// known issue(fix in next commit):
+// known issue(fix in next commit) and TODOs:
 // 1. cur_thread_cnt should start from 1, or it cause the failure of first reset
 // of time_res
 // 2. (data type of `test_res_avg` should change to ull)Change measurement time
@@ -6,6 +6,8 @@
 //    updated too. (I think gettimeofday is proper one)
 //    too many of this (resources to be released) will cause resource shortage
 //    of TCP stack, which further causing the failure of `connect`
+// 3. dummy message should be random-lengthed, which can improve the accuracy
+//    of the measurement.
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <netinet/in.h>
@@ -33,8 +35,6 @@
 #define unlikely(x) __builtin_expect(!!(x), 0)
 #define TEST_WAIT_INTERVAL_MS 100000
 
-// TODO: dummy msg shouldn't be a fixed-length string, its length should be
-// random to get more accurate measurement result
 const char *msg_dum = "dummy";
 
 // create once, fit all test case, then we dont need malloc
@@ -164,10 +164,10 @@ int main(void)
         goto fopen_fail;
     }
 
-    for (int cur_thread_cnt = 0; cur_thread_cnt < MAX_THREAD;
+    for (int cur_thread_cnt = 1; cur_thread_cnt <= MAX_THREAD;
          cur_thread_cnt++) {
         for (int i = 0; i < TEST_COUNT; i++) {
-            create_threads(cur_thread_cnt + 1);
+            create_threads(cur_thread_cnt);
 
             pthread_mutex_lock(&mutex_wa_cond);
 
@@ -199,11 +199,11 @@ int main(void)
                 time_res[i];  // summation of avg result of all threads
             // printf("%ld\n", test_res_avg);
         }
-        test_res_avg /= cur_thread_cnt + 1;  // avg result of kecho
+        test_res_avg /= cur_thread_cnt;  // avg result of kecho
 
         test_res_avg /= 1000;  // turn unit of result from ns to us
 
-        fprintf(fd_perf, "%d %ld\n", cur_thread_cnt + 1, test_res_avg);
+        fprintf(fd_perf, "%d %ld\n", cur_thread_cnt, test_res_avg);
 
         // reset for next measurement
         for (int i = 0; i < cur_thread_cnt; i++) {
