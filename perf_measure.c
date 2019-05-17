@@ -6,13 +6,14 @@
 // 1. cur_thread_cnt should start from 1, or it cause the failure of first reset
 // of time_res
 // 2. Typo "avg result for each thread" should be "avg result of each thread"
-// 3. Change measurement time scale from ns to us or ms, which means impl of
-// `time_diff_ns` should be updated
-//    too. (I think gettimeofday is proper one)
+// 3. (data type of `test_res_avg` should change to ull)Change measurement time
+//    scale from ns to us or ms, which means impl of `time_diff_ns` should be
+//    updated too. (I think gettimeofday is proper one)
 // 4. We should wait for a while after each thread set test case, since the
 // state of TCP stack, TIME_WAIT,
 //    too many of this (resources to be released) will cause resource shortage
 //    of TCP stack, which further causing the failure of `connect`
+// 5. Remove inclusion of semaphore since we may no longer use it
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <netinet/in.h>
@@ -28,15 +29,18 @@
 #include <unistd.h>
 
 #define COND_RD_WAIT_IN_SEC 1
-#define MAX_THREAD 20
+#define MAX_THREAD 50
 #define MAX_POSSIBLE_LENGTH \
     32  // this correspond to random-length dummy string, `msg_dum`
 #define TARGET_PORT 12345
-#define TEST_COUNT \
-    100  // we should change the measurement scale since ns is too small, which
-         // cause result overflow, then we can increase this
+
+// we should change the measurement scale since ns is too small, which
+// cause result overflow, then we can increase this
+#define TEST_COUNT 50
+
 #define RESULT_FILE_NAME "kecho_perf.txt"
 #define unlikely(x) __builtin_expect(!!(x), 0)
+#define TEST_WAIT_INTERVAL_MS 100000
 
 // TODO: dummy msg shouldn't be a fixed-length string, its length should be
 // random to get more accurate measurement result
@@ -121,13 +125,13 @@ void *worker(void *arg)
         goto timeout;
     }
 
-    rt = pthread_mutex_lock(&mutex_idx);
+    pthread_mutex_lock(&mutex_idx);
     // printf("\nmy idx is %d\n", idx);
     time_res[idx] += time_diff;
     idx++;
 
     pthread_mutex_unlock(&mutex_idx);
-
+    puts("going to exit");
     pthread_exit(NULL);
 
 timeout:
@@ -189,7 +193,8 @@ int main(void)
                              NULL);  // all threads should done eventually, no
                                      // deadlock-like stuff
             }
-
+            puts("done single test loop");
+            usleep(TEST_WAIT_INTERVAL_MS);
             // reset thread-related var
             rd_to_go = 0;
             idx = 0;
