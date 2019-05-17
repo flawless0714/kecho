@@ -6,12 +6,10 @@
 //    updated too. (I think gettimeofday is proper one)
 //    too many of this (resources to be released) will cause resource shortage
 //    of TCP stack, which further causing the failure of `connect`
-// 3. Remove inclusion of semaphore since we may no longer use it
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <pthread.h>
-#include <semaphore.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
