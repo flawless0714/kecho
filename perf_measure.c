@@ -1,12 +1,10 @@
 // known issue(fix in next commit) and TODOs:
-// 1. cur_thread_cnt should start from 1, or it cause the failure of first reset
-// of time_res
-// 2. (data type of `test_res_avg` should change to ull)Change measurement time
+// 1. (data type of `test_res_avg` should change to ull)Change measurement time
 //    scale from ns to us or ms, which means impl of `time_diff_ns` should be
 //    updated too. (I think gettimeofday is proper one)
 //    too many of this (resources to be released) will cause resource shortage
 //    of TCP stack, which further causing the failure of `connect`
-// 3. dummy message should be random-lengthed, which can improve the accuracy
+// 2. dummy message should be random-lengthed, which can improve the accuracy
 //    of the measurement.
 #include <arpa/inet.h>
 #include <fcntl.h>
@@ -22,18 +20,18 @@
 #include <unistd.h>
 
 #define COND_RD_WAIT_IN_SEC 1
-#define MAX_THREAD 50
+#define MAX_THREAD 1000
 #define MAX_POSSIBLE_LENGTH \
     32  // this correspond to random-length dummy string, `msg_dum`
 #define TARGET_PORT 12345
 
 // we should change the measurement scale since ns is too small, which
 // cause result overflow, then we can increase this
-#define TEST_COUNT 50
+#define TEST_COUNT 1
 
 #define RESULT_FILE_NAME "kecho_perf.txt"
 #define unlikely(x) __builtin_expect(!!(x), 0)
-#define TEST_WAIT_INTERVAL_MS 100000
+#define TEST_WAIT_INTERVAL_MS 200000
 
 const char *msg_dum = "dummy";
 
@@ -51,15 +49,10 @@ long time_res[MAX_THREAD] = {
     0};       // create once, fit all test case, then we dont need malloc
 int idx = 0;  // for indexing `time_res`
 
-static inline long time_diff_ns(struct timespec *start, struct timespec *end)
+static inline long time_diff_us(struct timeval *start, struct timeval *end)
 {
-    long delta = end->tv_nsec - start->tv_nsec;
-
-    if ((end->tv_sec - start->tv_sec) > 1)
-        return -1;  // calculation of fabonacci spends too much time (at least 2
-                    // second), won't happen at usual
-
-    return delta;
+    return (end->tv_sec - start->tv_sec) * 10e6 +
+           (end->tv_usec - start->tv_usec);
 }
 
 void *worker(void *arg)
@@ -67,9 +60,7 @@ void *worker(void *arg)
     int sock_fd, rt;
     char dummy[MAX_POSSIBLE_LENGTH];
     long time_diff;
-    struct timespec start, end;
-
-    struct timeval now;
+    struct timeval now, start, end;
     struct timespec timeout;
 
     gettimeofday(&now, NULL);
@@ -103,18 +94,14 @@ void *worker(void *arg)
         goto connect_fail;
     }
 
-    clock_gettime(CLOCK_REALTIME, &start);
+    gettimeofday(&start, NULL);
     send(sock_fd, msg_dum, strlen(msg_dum), 0);
     recv(sock_fd, &dummy, MAX_POSSIBLE_LENGTH, 0);
-    clock_gettime(CLOCK_REALTIME, &end);
+    gettimeofday(&end, NULL);
 
     close(sock_fd);
 
-
-    time_diff = time_diff_ns(&start, &end);
-    if (unlikely(time_diff == -1)) {
-        goto timeout;
-    }
+    time_diff = time_diff_us(&start, &end);
 
     pthread_mutex_lock(&mutex_idx);
     // printf("\nmy idx is %d\n", idx);
@@ -124,10 +111,6 @@ void *worker(void *arg)
     pthread_mutex_unlock(&mutex_idx);
     puts("going to exit");
     pthread_exit(NULL);
-
-timeout:
-    puts("Socket transmission timeout (over one second)");
-    exit(-1);
 
 sock_init_fail:
     perror("Socket create failed");
@@ -200,8 +183,6 @@ int main(void)
             // printf("%ld\n", test_res_avg);
         }
         test_res_avg /= cur_thread_cnt;  // avg result of kecho
-
-        test_res_avg /= 1000;  // turn unit of result from ns to us
 
         fprintf(fd_perf, "%d %ld\n", cur_thread_cnt, test_res_avg);
 
