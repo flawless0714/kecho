@@ -31,7 +31,7 @@
 
 #define RESULT_FILE_NAME "kecho_perf.txt"
 #define unlikely(x) __builtin_expect(!!(x), 0)
-#define TEST_WAIT_INTERVAL_MS 250000
+#define TEST_WAIT_INTERVAL_US 250000
 
 const char *msg_dum = "dummy";
 
@@ -168,7 +168,7 @@ int main(void)
                                      // deadlock-like stuff
             }
             puts("done single test loop");
-            usleep(TEST_WAIT_INTERVAL_MS);
+            usleep(TEST_WAIT_INTERVAL_US);
             // reset thread-related var
             rd_to_go = 0;
             idx = 0;
