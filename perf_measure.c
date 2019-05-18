@@ -31,7 +31,7 @@
 
 #define RESULT_FILE_NAME "kecho_perf.txt"
 #define unlikely(x) __builtin_expect(!!(x), 0)
-#define TEST_WAIT_INTERVAL_MS 200000
+#define TEST_WAIT_INTERVAL_MS 250000
 
 const char *msg_dum = "dummy";
 
