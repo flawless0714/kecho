@@ -27,7 +27,7 @@
 
 // we should change the measurement scale since ns is too small, which
 // cause result overflow, then we can increase this
-#define TEST_COUNT 1
+#define TEST_COUNT 10
 
 #define RESULT_FILE_NAME "kecho_perf.txt"
 #define unlikely(x) __builtin_expect(!!(x), 0)
@@ -51,7 +51,9 @@ int idx = 0;  // for indexing `time_res`
 
 static inline long time_diff_us(struct timeval *start, struct timeval *end)
 {
-    return (end->tv_sec - start->tv_sec) * 10e6 +
+    return ((end->tv_sec - start->tv_sec) != 0 ? (end->tv_sec - start->tv_sec)
+                                               : 0) *
+               10e6 +
            (end->tv_usec - start->tv_usec);
 }
 
