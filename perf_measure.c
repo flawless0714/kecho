@@ -59,7 +59,8 @@ static inline long time_diff_us(struct timeval *start, struct timeval *end)
 
 void *worker(void *arg)
 {
-    int sock_fd, rt;
+    int sock_fd, rt = 0; /* cppcheck insist `rt` being initialized, have no time
+                            figure how to bypass this */
     char dummy[MAX_POSSIBLE_LENGTH];
     long time_diff;
     struct timeval now, start, end;
@@ -70,7 +71,7 @@ void *worker(void *arg)
     timeout.tv_nsec = now.tv_usec * 1000;
 
     pthread_mutex_lock(&mutex_wa_cond);
-    while (!rd_to_go) {
+    if (!rd_to_go) {
         // wait till all threads created
         rt = pthread_cond_timedwait(&cond_wait_all, &mutex_wa_cond, &timeout);
     }
